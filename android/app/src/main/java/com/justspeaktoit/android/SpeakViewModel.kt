@@ -17,6 +17,7 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SpeakRepository(application)
     private val appContext = application.applicationContext
     private val speechTranscriber = AndroidSpeechTranscriber(appContext)
+    private val remoteTranscriber = RemoteStreamingTranscriber(appContext)
     private val postProcessor = OpenRouterPostProcessor()
     private val openClawGateway = OpenClawGatewayClient()
     private val speechSpeaker = AndroidSpeechSpeaker(appContext)
@@ -91,14 +92,12 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.settings.liveNotificationsEnabled) {
             appContext.startService(Intent(appContext, RecordingForegroundService::class.java).setAction(RecordingForegroundService.ACTION_START))
         }
-        liveTranscriptionSession = if (selected == "android/local/SpeechRecognizer") {
-            speechTranscriber.start(
-                onPartial = { partial -> _uiState.update { it.copy(transcriptText = partial) } },
-                onFinal = { final -> _uiState.update { it.copy(transcriptText = final) } },
-                onError = { error -> _uiState.update { it.copy(statusMessage = error) } }
-            )
-        } else {
-            null
+        liveTranscriptionSession = when {
+            selected == "android/local/SpeechRecognizer" -> startAndroidSpeechSession()
+            selected.startsWith("deepgram") -> startRemoteTranscriptionSession(selected, repository.readSecret("deepgram.apiKey"))
+            selected.startsWith("elevenlabs") -> startRemoteTranscriptionSession(selected, repository.readSecret("elevenlabs.apiKey"))
+            selected.startsWith("openai") -> startRemoteTranscriptionSession(selected, repository.readSecret("openai.apiKey"))
+            else -> null
         }
         if (liveTranscriptionSession == null) {
             startValidationTranscription(selected)
@@ -343,6 +342,24 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    private fun startAndroidSpeechSession(): LiveTranscriptionSession? {
+        return speechTranscriber.start(
+            onPartial = { partial -> _uiState.update { it.copy(transcriptText = partial) } },
+            onFinal = { final -> _uiState.update { it.copy(transcriptText = final) } },
+            onError = { error -> _uiState.update { it.copy(statusMessage = error) } }
+        )
+    }
+
+    private fun startRemoteTranscriptionSession(model: String, apiKey: String): LiveTranscriptionSession? {
+        return remoteTranscriber.start(
+            model = model,
+            apiKey = apiKey,
+            onPartial = { partial -> _uiState.update { it.copy(transcriptText = partial) } },
+            onFinal = { final -> _uiState.update { it.copy(transcriptText = final) } },
+            onError = { error -> _uiState.update { it.copy(statusMessage = error) } }
+        )
     }
 
     private fun applyProcessedTranscript(processed: String) {

@@ -17,13 +17,14 @@ Create a native Android app in this repository that mirrors the iOS app feature-
 | Room or DataStore persistence | `SpeakRepository.kt` uses Android DataStore for settings, history, and conversations | Present |
 | Android Keystore-backed encrypted storage | `SpeakRepository.kt` uses `MasterKey` + `EncryptedSharedPreferences` for secrets | Present |
 | OkHttp/WebSocket | `OpenClawGatewayClient` uses OkHttp `newWebSocket`; `OpenRouterPostProcessor` uses OkHttp HTTP | Present |
-| Android speech APIs | `AndroidSpeechTranscriber` uses `SpeechRecognizer` when microphone permission is granted | Present |
+| Android speech APIs | `AndroidSpeechTranscriber` uses `SpeechRecognizer`; `RemoteStreamingTranscriber` uses Android `AudioRecord` PCM capture for cloud streaming providers | Present |
 | Notification/foreground service controls | `RecordingForegroundService.kt` and manifest service declaration | Present |
 | Shortcut/intent equivalent | `android/app/src/main/res/xml/shortcuts.xml` and `MainActivity.ACTION_TOGGLE_RECORDING` | Present |
 | Transcribe tab flow | `MainActivityParityTest.transcribeFlow_recordsCopiesAndShowsHistory` | Verified by adb instrumentation |
 | Settings/API key flow | `MainActivityParityTest.settingsFlow_exposesApiPostProcessingAndOpenClawConfiguration` | Verified by adb instrumentation |
 | History flow | `MainActivityParityTest.transcribeFlow_recordsCopiesAndShowsHistory` | Verified by adb instrumentation |
-| Post-processing flow | UI and model/prompt settings exist; unit test covers deterministic formatter; OpenRouter adapter is implemented | Partly verified: network OpenRouter call not exercised without a key |
+| Deepgram/ElevenLabs/OpenAI transcription | `RemoteStreamingTranscriber` opens provider WebSockets and streams microphone PCM when the selected provider has a saved key and permission | Build verified; external services not exercised without keys |
+| Post-processing flow | UI and model/prompt settings exist; unit test covers deterministic formatter; OpenRouter adapter is implemented | UI/build verified; network OpenRouter call not exercised without a key |
 | OpenClaw list/chat flow | `MainActivityParityTest.openClawFlow_createsConversationAndReceivesAssistantResponse`; `OpenClawGatewayClient` implemented | UI verified; real gateway path not exercised without a token/server |
 | TTS controls | `OpenClawSettingsScreen` controls plus `AndroidSpeechSpeaker` | Build verified; audible TTS not emulator-asserted |
 | ADB-backed emulator validation | `android/scripts/validate-emulator.sh` | Verified locally |
@@ -49,4 +50,4 @@ Result:
 
 ## Remaining Risk
 
-The emulator suite intentionally uses deterministic validation paths when personal API keys, microphone audio, or an OpenClaw gateway are unavailable. The app now contains real Android runtime adapters for Android Speech, OpenRouter, OpenClaw WebSocket, and Android TextToSpeech, but the live cloud-provider paths are not end-to-end validated against real Deepgram, ElevenLabs, OpenAI, OpenRouter, or OpenClaw services in this run.
+The emulator suite intentionally uses deterministic validation paths when personal API keys, microphone audio, or an OpenClaw gateway are unavailable. The app now contains real Android runtime adapters for Android Speech, Deepgram, ElevenLabs, OpenAI Realtime, OpenRouter, OpenClaw WebSocket, and Android TextToSpeech, but external cloud-service calls are not end-to-end validated against real credentials in this run.

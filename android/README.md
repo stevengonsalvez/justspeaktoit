@@ -7,7 +7,7 @@ Native Android parity app for the iOS `SpeakiOS` target.
 - UI: Kotlin, Jetpack Compose, Material 3, AndroidX Navigation/lifecycle
 - Persistence: Android DataStore for settings/history/conversations
 - Secrets: Android Keystore-backed `EncryptedSharedPreferences`
-- Local transcription: Android `SpeechRecognizer` with deterministic emulator fallback
+- Transcription: Android `SpeechRecognizer` locally, plus AudioRecord/OkHttp WebSocket streaming for Deepgram, ElevenLabs Scribe, and OpenAI Realtime when keys and microphone permission are available
 - Post-processing: OpenRouter HTTP via OkHttp with deterministic polish fallback
 - OpenClaw: OkHttp WebSocket gateway client with deterministic emulator fallback
 - Speech output: Android TextToSpeech for assistant responses
