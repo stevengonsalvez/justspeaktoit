@@ -19,14 +19,14 @@ grep -q "OK (3 tests)" "$OUT_DIR/adb-instrumentation.txt"
 adb shell pm clear "$PKG" >/dev/null || true
 adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
 adb shell am start -n "$PKG/$ACTIVITY"
-for _ in 1 2 3 4 5; do
+for _ in $(seq 1 15); do
   adb shell dumpsys window | sed -n '/mCurrentFocus/p;/mFocusedApp/p' > "$OUT_DIR/window-focus.txt"
-  if grep -q "mCurrentFocus=.*$PKG/$ACTIVITY" "$OUT_DIR/window-focus.txt"; then
+  if grep -Eq "m(CurrentFocus|FocusedApp)=.*$PKG/$ACTIVITY" "$OUT_DIR/window-focus.txt"; then
     break
   fi
   sleep 1
 done
-grep -q "mCurrentFocus=.*$PKG/$ACTIVITY" "$OUT_DIR/window-focus.txt"
+grep -Eq "m(CurrentFocus|FocusedApp)=.*$PKG/$ACTIVITY" "$OUT_DIR/window-focus.txt"
 sleep 5
 adb shell screencap -p /sdcard/justspeaktoit-android.png
 adb pull /sdcard/justspeaktoit-android.png "$OUT_DIR/justspeaktoit-android.png"

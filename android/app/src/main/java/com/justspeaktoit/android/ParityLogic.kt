@@ -1,5 +1,8 @@
 package com.justspeaktoit.android
 
+import org.json.JSONArray
+import org.json.JSONObject
+
 object OpenClawProtocol {
     fun normaliseGatewayUrl(raw: String): String {
         val trimmed = raw.trim()
@@ -38,6 +41,33 @@ object OpenClawProtocol {
         return Regex("[\\s\\p{Punct}]*$escaped[\\s\\p{Punct}]*$", RegexOption.IGNORE_CASE)
             .replace(trimmed, "")
             .trim()
+    }
+
+    fun chatPayload(sessionKey: String, message: String): JSONObject {
+        return JSONObject()
+            .put("type", "chat")
+            .put("session_key", sessionKey)
+            .put(
+                "messages",
+                JSONArray()
+                    .put(JSONObject().put("role", "user").put("content", message))
+            )
+            .put("stream", true)
+    }
+
+    fun extractAssistantContent(message: String): String {
+        val objectMessage = runCatching { JSONObject(message) }.getOrNull() ?: return message
+        return objectMessage.optString("content")
+            .ifBlank { objectMessage.optString("delta") }
+            .ifBlank { objectMessage.optJSONObject("message")?.optString("content").orEmpty() }
+    }
+
+    fun isCompletionMessage(message: String): Boolean {
+        val objectMessage = runCatching { JSONObject(message) }.getOrNull() ?: return false
+        return objectMessage.optBoolean("done") ||
+            objectMessage.optBoolean("completed") ||
+            objectMessage.optString("type").equals("done", ignoreCase = true) ||
+            objectMessage.optString("type").equals("complete", ignoreCase = true)
     }
 
     private fun Char.isPunctuation(): Boolean {

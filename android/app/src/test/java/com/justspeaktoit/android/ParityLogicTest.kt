@@ -46,6 +46,22 @@ class ParityLogicTest {
     }
 
     @Test
+    fun chatPayload_matchesOpenClawStreamingShape() {
+        val payload = OpenClawProtocol.chatPayload("speak-android:voice:test", "hello")
+        assertEquals("chat", payload.getString("type"))
+        assertEquals("speak-android:voice:test", payload.getString("session_key"))
+        assertTrue(payload.getBoolean("stream"))
+        assertEquals("hello", payload.getJSONArray("messages").getJSONObject(0).getString("content"))
+    }
+
+    @Test
+    fun extractAssistantContent_readsGatewayMessageShapes() {
+        assertEquals("hello", OpenClawProtocol.extractAssistantContent("""{"message":{"content":"hello"}}"""))
+        assertEquals("chunk", OpenClawProtocol.extractAssistantContent("""{"delta":"chunk"}"""))
+        assertTrue(OpenClawProtocol.isCompletionMessage("""{"type":"complete"}"""))
+    }
+
+    @Test
     fun transcriptFormatter_polishesSpacingCasingAndPunctuation() {
         assertEquals("Hello android.", TranscriptFormatter.polish("  hello   android "))
     }

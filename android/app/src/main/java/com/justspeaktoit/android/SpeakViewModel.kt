@@ -16,6 +16,12 @@ import kotlinx.coroutines.launch
 class SpeakViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SpeakRepository(application)
     private val appContext = application.applicationContext
+    private val speechTranscriber = AndroidSpeechTranscriber(appContext)
+    private val postProcessor = OpenRouterPostProcessor()
+    private val openClawGateway = OpenClawGatewayClient()
+    private val speechSpeaker = AndroidSpeechSpeaker(appContext)
+    private var liveTranscriptionSession: LiveTranscriptionSession? = null
+    private var gatewaySession: GatewaySession? = null
 
     private val _uiState = MutableStateFlow(
         SpeakUiState(
@@ -85,18 +91,24 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.settings.liveNotificationsEnabled) {
             appContext.startService(Intent(appContext, RecordingForegroundService::class.java).setAction(RecordingForegroundService.ACTION_START))
         }
-        viewModelScope.launch {
-            delay(250)
-            if (_uiState.value.isRecording) {
-                _uiState.update {
-                    it.copy(transcriptText = "This is a live Android transcription from ${modelLabel(selected)}")
-                }
-            }
+        liveTranscriptionSession = if (selected == "android/local/SpeechRecognizer") {
+            speechTranscriber.start(
+                onPartial = { partial -> _uiState.update { it.copy(transcriptText = partial) } },
+                onFinal = { final -> _uiState.update { it.copy(transcriptText = final) } },
+                onError = { error -> _uiState.update { it.copy(statusMessage = error) } }
+            )
+        } else {
+            null
+        }
+        if (liveTranscriptionSession == null) {
+            startValidationTranscription(selected)
         }
     }
 
     private fun stopRecording() {
         val state = _uiState.value
+        liveTranscriptionSession?.stop()
+        liveTranscriptionSession = null
         val duration = ((System.currentTimeMillis() - (state.recordingStartedAtMillis ?: System.currentTimeMillis())) / 1000)
             .toInt()
             .coerceAtLeast(1)
@@ -137,13 +149,25 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun processTranscript(text: String = _uiState.value.transcriptText) {
-        val processed = TranscriptFormatter.polish(text)
-        _uiState.update {
-            it.copy(
-                processedText = processed,
-                transcriptText = processed.ifBlank { it.transcriptText },
-                statusMessage = if (processed.isBlank()) "Nothing to polish" else "Transcript polished"
-            )
+        val state = _uiState.value
+        val openRouterKey = repository.readSecret("openrouter.apiKey")
+        if (state.settings.openRouterKeyStored && openRouterKey.isNotBlank() && text.isNotBlank()) {
+            _uiState.update { it.copy(statusMessage = "Polishing with ${state.settings.postProcessingModel}") }
+            viewModelScope.launch {
+                val processed = runCatching {
+                    postProcessor.process(
+                        text = text,
+                        prompt = _uiState.value.settings.postProcessingPrompt,
+                        model = _uiState.value.settings.postProcessingModel,
+                        apiKey = openRouterKey
+                    )
+                }.getOrElse {
+                    TranscriptFormatter.polish(text)
+                }
+                applyProcessedTranscript(processed)
+            }
+        } else {
+            applyProcessedTranscript(TranscriptFormatter.polish(text))
         }
     }
 
@@ -219,27 +243,13 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
                 openClawConnectionState = if (it.openClawSettings.isConfigured) "Connected" else "Validation Mode"
             )
         }
-        viewModelScope.launch {
-            delay(250)
-            val response = ChatMessage(
-                role = "assistant",
-                content = "OpenClaw heard: $trimmed"
-            )
-            val withAssistant = appendMessage(_uiState.value.conversations, selected, response)
-            repository.saveConversations(withAssistant)
-            _uiState.update {
-                it.copy(
-                    conversations = withAssistant,
-                    isOpenClawProcessing = false,
-                    isSpeaking = it.openClawSettings.ttsEnabled,
-                    statusMessage = if (it.openClawSettings.ttsEnabled) "Speaking with Deepgram ${it.openClawSettings.ttsVoice}" else "Response received"
-                )
-            }
-            delay(400)
-            _uiState.update { it.copy(isSpeaking = false) }
-            if (_uiState.value.openClawSettings.conversationModeEnabled && _uiState.value.openClawSettings.autoResumeListening) {
-                startOpenClawVoiceInput()
-            }
+        val configured = state.openClawSettings.isConfigured
+        val token = repository.readSecret("openclaw.token")
+        val conversation = withUser.firstOrNull { it.id == selected }
+        if (configured && token.isNotBlank() && conversation != null) {
+            sendConfiguredOpenClawMessage(conversation, trimmed, token)
+        } else {
+            sendValidationOpenClawMessage(selected, trimmed)
         }
     }
 
@@ -324,6 +334,80 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
         }.sortedByDescending { it.updatedAtMillis }
     }
 
+    private fun startValidationTranscription(selected: String) {
+        viewModelScope.launch {
+            delay(250)
+            if (_uiState.value.isRecording) {
+                _uiState.update {
+                    it.copy(transcriptText = "This is a live Android transcription from ${modelLabel(selected)}")
+                }
+            }
+        }
+    }
+
+    private fun applyProcessedTranscript(processed: String) {
+        _uiState.update {
+            it.copy(
+                processedText = processed,
+                transcriptText = processed.ifBlank { it.transcriptText },
+                statusMessage = if (processed.isBlank()) "Nothing to polish" else "Transcript polished"
+            )
+        }
+    }
+
+    private fun sendValidationOpenClawMessage(conversationId: String, trimmed: String) {
+        viewModelScope.launch {
+            delay(250)
+            handleOpenClawAssistantMessage(conversationId, "OpenClaw heard: $trimmed")
+        }
+    }
+
+    private fun sendConfiguredOpenClawMessage(conversation: Conversation, trimmed: String, token: String) {
+        gatewaySession?.close()
+        val chunks = StringBuilder()
+        gatewaySession = openClawGateway.send(
+            gatewayUrl = _uiState.value.openClawSettings.gatewayUrl,
+            token = token,
+            conversation = conversation,
+            message = trimmed,
+            onChunk = { chunk ->
+                chunks.append(chunk)
+                _uiState.update { it.copy(statusMessage = "Receiving OpenClaw response") }
+            },
+            onComplete = {
+                val response = chunks.toString().ifBlank { "OpenClaw response received" }
+                handleOpenClawAssistantMessage(conversation.id, response)
+            },
+            onError = {
+                handleOpenClawAssistantMessage(conversation.id, "OpenClaw heard: $trimmed")
+            }
+        )
+    }
+
+    private fun handleOpenClawAssistantMessage(conversationId: String, responseText: String) {
+        val response = ChatMessage(role = "assistant", content = responseText)
+        val withAssistant = appendMessage(_uiState.value.conversations, conversationId, response)
+        repository.saveConversations(withAssistant)
+        _uiState.update {
+            it.copy(
+                conversations = withAssistant,
+                isOpenClawProcessing = false,
+                isSpeaking = it.openClawSettings.ttsEnabled,
+                statusMessage = if (it.openClawSettings.ttsEnabled) "Speaking with ${it.openClawSettings.ttsVoice}" else "Response received"
+            )
+        }
+        if (_uiState.value.openClawSettings.ttsEnabled) {
+            speechSpeaker.speak(responseText, _uiState.value.openClawSettings.ttsSpeed)
+        }
+        viewModelScope.launch {
+            delay(400)
+            _uiState.update { it.copy(isSpeaking = false) }
+            if (_uiState.value.openClawSettings.conversationModeEnabled && _uiState.value.openClawSettings.autoResumeListening) {
+                startOpenClawVoiceInput()
+            }
+        }
+    }
+
     private fun resolvedModel(settings: SpeakSettings): String {
         return when {
             settings.selectedModel.startsWith("deepgram") && !settings.deepgramKeyStored -> "android/local/SpeechRecognizer"
@@ -340,5 +424,12 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
             model.startsWith("openai") -> "OpenAI gpt-realtime-whisper"
             else -> "Android Speech"
         }
+    }
+
+    override fun onCleared() {
+        liveTranscriptionSession?.stop()
+        gatewaySession?.close()
+        speechSpeaker.stop()
+        super.onCleared()
     }
 }
