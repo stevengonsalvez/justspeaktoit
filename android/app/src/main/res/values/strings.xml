@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Just Speak to It</string>
+    <string name="shortcut_transcribe_short_label">Transcribe Voice</string>
+    <string name="shortcut_transcribe_long_label">Start or stop transcription</string>
+</resources>

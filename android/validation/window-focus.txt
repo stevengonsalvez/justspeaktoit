@@ -1,0 +1,2 @@
+  mCurrentFocus=Window{af777b6 u0 com.justspeaktoit.android.debug/com.justspeaktoit.android.MainActivity}
+  mFocusedApp=ActivityRecord{aa4ab04 u0 com.justspeaktoit.android.debug/com.justspeaktoit.android.MainActivity t301}
