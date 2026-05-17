@@ -1,2 +1,2 @@
   mCurrentFocus=null
-  mFocusedApp=ActivityRecord{8ff96fe u0 com.justspeaktoit.android.debug/com.justspeaktoit.android.MainActivity t324}
+  mFocusedApp=ActivityRecord{37fe657 u0 com.justspeaktoit.android.debug/com.justspeaktoit.android.MainActivity t332}

@@ -43,7 +43,7 @@ INSTRUMENTATION_STATUS: test=transcribeFlow_recordsCopiesAndShowsHistory
 INSTRUMENTATION_STATUS_CODE: 0
 INSTRUMENTATION_RESULT: stream=
 
-Time: 64.854
+Time: 59.848
 
 OK (3 tests)
 

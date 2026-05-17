@@ -9,12 +9,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,8 +32,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.KeyboardVoice
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.RadioButtonChecked
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -54,8 +71,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -103,27 +123,36 @@ private fun JustSpeakToItApp(viewModel: SpeakViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     MaterialTheme(
         colorScheme = lightColorScheme(
-            primary = Color(0xFF0F6B73),
-            secondary = Color(0xFFB36B00),
-            tertiary = Color(0xFF6E4B8B)
+            primary = JsiTeal,
+            secondary = JsiAmber,
+            tertiary = JsiPlum,
+            background = JsiCanvas,
+            surface = Color.White,
+            surfaceVariant = JsiMist,
+            onPrimary = Color.White,
+            onSurface = JsiInk
         )
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Surface(modifier = Modifier.fillMaxSize(), color = JsiCanvas) {
             Scaffold(
+                containerColor = Color.Transparent,
                 bottomBar = {
-                    NavigationBar {
+                    NavigationBar(
+                        containerColor = Color.White.copy(alpha = 0.96f),
+                        tonalElevation = 10.dp
+                    ) {
                         NavigationBarItem(
                             selected = state.activeTab == MainTab.Transcribe,
                             onClick = { viewModel.selectTab(MainTab.Transcribe) },
                             label = { Text("Transcribe") },
-                            icon = { Text("Mic") },
+                            icon = { Icon(Icons.Rounded.Mic, contentDescription = "Transcribe") },
                             modifier = Modifier.testTag("tabTranscribe")
                         )
                         NavigationBarItem(
                             selected = state.activeTab == MainTab.OpenClaw,
                             onClick = { viewModel.selectTab(MainTab.OpenClaw) },
                             label = { Text("OpenClaw") },
-                            icon = { Text("Bolt") },
+                            icon = { Icon(Icons.Rounded.Bolt, contentDescription = "OpenClaw") },
                             modifier = Modifier.testTag("tabOpenClaw")
                         )
                     }
@@ -155,84 +184,182 @@ private fun AppContent(state: SpeakUiState, viewModel: SpeakViewModel, padding: 
 
 @Composable
 private fun TranscribeScreen(state: SpeakUiState, viewModel: SpeakViewModel, padding: PaddingValues) {
-    LazyColumn(
+    Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(AppBackgroundBrush)
             .padding(padding)
-            .testTag("transcribeScreen"),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .testTag("transcribeScreen")
     ) {
-        item {
-            Header(
-                title = "Just Speak to It",
-                subtitle = if (state.isRecording) "Recording with live transcript" else "Tap the microphone to start transcription"
-            )
-        }
-        item {
-            TranscriptCard(state)
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    onClick = { viewModel.toggleRecording() },
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .size(96.dp)
-                        .testTag("recordButton"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (state.isRecording) Color(0xFFB3261E) else MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text(if (state.isRecording) "Stop" else "Mic")
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { viewModel.showPostProcessing() },
-                        enabled = state.transcriptText.isNotBlank(),
-                        modifier = Modifier.testTag("polishButton")
-                    ) {
-                        Text("Polish")
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.copyTranscript() },
-                        enabled = state.transcriptText.isNotBlank(),
-                        modifier = Modifier.testTag("copyButton")
-                    ) {
-                        Text(if (state.copied) "Copied" else "Copy")
-                    }
-                }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 20.dp, top = 22.dp, end = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Header(
+                    title = "Just Speak to It",
+                    subtitle = if (state.isRecording) "Recording with live transcript" else "Tap the microphone to start transcription"
+                )
             }
+            item { StatusRibbon(state) }
+            item { RecordingCockpit(state, viewModel) }
+            item { TranscriptCard(state) }
+            item { QuickActions(state, viewModel) }
+            item { StatusText(state.statusMessage) }
         }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = { viewModel.showHistory() }, modifier = Modifier.testTag("historyButton")) {
-                    Text("History")
-                }
-                OutlinedButton(onClick = { viewModel.showSettings() }, modifier = Modifier.testTag("settingsButton")) {
-                    Text("Settings")
-                }
-            }
-        }
-        item { StatusText(state.statusMessage) }
     }
 }
 
 @Composable
 private fun TranscriptCard(state: SpeakUiState) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Transcript", fontWeight = FontWeight.SemiBold)
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Rounded.Waves, contentDescription = null, tint = JsiTeal)
+                Text("Transcript", fontWeight = FontWeight.Bold, color = JsiInk)
+                Spacer(Modifier.weight(1f))
+                if (state.isRecording) StatusChip("Live", JsiCoral, Color(0xFFFFF0ED))
+            }
             Text(
                 text = state.processedText.ifBlank { state.transcriptText.ifBlank { "Tap the microphone to start transcription" } },
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
+                color = if (state.transcriptText.isBlank() && state.processedText.isBlank()) JsiMuted else JsiInk,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("transcriptText")
             )
-            if (state.isRecording) {
-                Text("Live", color = Color(0xFFB3261E), modifier = Modifier.testTag("recordingIndicator"))
+            Text(
+                text = if (state.transcriptText.isBlank()) "Idle and ready" else "${state.transcriptText.split(Regex("\\s+")).filter { it.isNotBlank() }.size} words captured",
+                color = JsiMuted,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (state.isRecording) Text("Live", color = JsiCoral, modifier = Modifier.testTag("recordingIndicator"))
+        }
+    }
+}
+
+@Composable
+private fun StatusRibbon(state: SpeakUiState) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatusChip(modelShortLabel(state.settings.selectedModel), JsiTeal, Color(0xFFE6F5F3), Modifier.weight(1f))
+        StatusChip("Private first", JsiPlum, Color(0xFFF0EAF7), Modifier.weight(1f))
+        StatusChip(if (state.history.isEmpty()) "No history" else "${state.history.size} saved", JsiAmber, Color(0xFFFFF4DD), Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun RecordingCockpit(state: SpeakUiState, viewModel: SpeakViewModel) {
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            RecordButton(state, viewModel)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    if (state.isRecording) "Listening now" else "Ready for voice capture",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = JsiInk
+                )
+                Text(
+                    if (state.isRecording) "Speak naturally. Text appears as the provider returns it." else "On-device by default, cloud-ready when you choose a provider.",
+                    color = JsiMuted,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                VoiceBars(active = state.isRecording)
             }
+        }
+    }
+}
+
+@Composable
+private fun RecordButton(state: SpeakUiState, viewModel: SpeakViewModel) {
+    Box(
+        modifier = Modifier
+            .size(128.dp)
+            .clip(CircleShape)
+            .background(if (state.isRecording) RecordHotBrush else RecordBrush)
+            .border(5.dp, Color.White.copy(alpha = 0.78f), CircleShape)
+            .testTag("recordButton")
+            .clickable { viewModel.toggleRecording() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(
+                if (state.isRecording) Icons.Rounded.RadioButtonChecked else Icons.Rounded.KeyboardVoice,
+                contentDescription = if (state.isRecording) "Stop recording" else "Start recording",
+                tint = Color.White,
+                modifier = Modifier.size(34.dp)
+            )
+            Text(if (state.isRecording) "Stop" else "Mic", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun VoiceBars(active: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom) {
+        listOf(18, 30, 44, 26, 38, 20, 32).forEachIndexed { index, height ->
+            Box(
+                modifier = Modifier
+                    .width(8.dp)
+                    .height((if (active) height else 14 + (index % 3) * 4).dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (active) JsiTeal.copy(alpha = 0.88f) else Color(0xFFD7DDE3))
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActions(state: SpeakUiState, viewModel: SpeakViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            ActionButton(
+                label = "Polish",
+                icon = Icons.Rounded.AutoAwesome,
+                enabled = state.transcriptText.isNotBlank(),
+                onClick = { viewModel.showPostProcessing() },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("polishButton")
+            )
+            ActionButton(
+                label = if (state.copied) "Copied" else "Copy",
+                icon = Icons.Rounded.ContentCopy,
+                enabled = state.transcriptText.isNotBlank(),
+                onClick = { viewModel.copyTranscript() },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("copyButton")
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            ActionButton(
+                label = "History",
+                icon = Icons.Rounded.History,
+                onClick = { viewModel.showHistory() },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("historyButton")
+            )
+            ActionButton(
+                label = "Settings",
+                icon = Icons.Rounded.Settings,
+                onClick = { viewModel.showSettings() },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("settingsButton")
+            )
         }
     }
 }
@@ -656,8 +783,8 @@ private fun InfoScreen(title: String, body: String, padding: PaddingValues, onBa
 @Composable
 private fun Header(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = Color.Gray)
+        Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = JsiInk)
+        Text(subtitle, color = JsiMuted, style = MaterialTheme.typography.titleMedium)
     }
 }
 
@@ -672,7 +799,7 @@ private fun BackHeader(title: String, subtitle: String, onBack: () -> Unit) {
 @Composable
 private fun StatusText(text: String?) {
     if (!text.isNullOrBlank()) {
-        Text(text, color = Color.Gray, modifier = Modifier.testTag("statusMessage"))
+        StatusChip(text, JsiTeal, Color.White, modifier = Modifier.testTag("statusMessage"))
     }
 }
 
@@ -686,11 +813,73 @@ private fun Stat(value: String, label: String) {
 
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    PremiumCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, fontWeight = FontWeight.Bold)
             content()
         }
+    }
+}
+
+@Composable
+private fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Card(
+        modifier = modifier.border(1.dp, Color.White.copy(alpha = 0.76f), RoundedCornerShape(8.dp)),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.92f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        content = { content() }
+    )
+}
+
+@Composable
+private fun StatusChip(label: String, contentColor: Color, backgroundColor: Color, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.height(38.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = backgroundColor,
+        contentColor = contentColor
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp)) {
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun ActionButton(
+    label: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.White,
+            contentColor = JsiTeal,
+            disabledContainerColor = Color.White.copy(alpha = 0.62f),
+            disabledContentColor = JsiMuted.copy(alpha = 0.72f)
+        ),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, disabledElevation = 0.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 14.dp),
+        modifier = modifier.height(58.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun modelShortLabel(model: String): String {
+    return when {
+        model.startsWith("deepgram") -> "Deepgram"
+        model.startsWith("elevenlabs") -> "Scribe"
+        model.startsWith("openai") -> "OpenAI"
+        else -> "On-device"
     }
 }
 
@@ -751,3 +940,25 @@ private fun MessageBubble(message: ChatMessage) {
         }
     }
 }
+
+private val JsiInk = Color(0xFF171821)
+private val JsiMuted = Color(0xFF73717D)
+private val JsiCanvas = Color(0xFFFBF8F7)
+private val JsiMist = Color(0xFFEAE5EE)
+private val JsiTeal = Color(0xFF0C7478)
+private val JsiAmber = Color(0xFFB36B00)
+private val JsiPlum = Color(0xFF6A4C84)
+private val JsiCoral = Color(0xFFC9513E)
+private val AppBackgroundBrush = Brush.verticalGradient(
+    colors = listOf(
+        Color(0xFFFFFCFA),
+        Color(0xFFF4F1F6),
+        Color(0xFFEFF4F3)
+    )
+)
+private val RecordBrush = Brush.linearGradient(
+    colors = listOf(Color(0xFF0D7C81), Color(0xFF0A5D67), Color(0xFF203B58))
+)
+private val RecordHotBrush = Brush.linearGradient(
+    colors = listOf(Color(0xFFC9513E), Color(0xFF9B2F2A), Color(0xFF44224D))
+)
