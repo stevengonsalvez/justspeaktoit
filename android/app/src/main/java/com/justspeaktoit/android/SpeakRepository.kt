@@ -45,7 +45,15 @@ class SpeakRepository(private val context: Context) {
             elevenLabsKeyStored = hasSecret("elevenlabs.apiKey"),
             openRouterKeyStored = hasSecret("openrouter.apiKey"),
             openAIKeyStored = hasSecret("openai.apiKey"),
-            debugLoggingEnabled = prefs[Keys.DEBUG_LOGGING_ENABLED] ?: false
+            debugLoggingEnabled = prefs[Keys.DEBUG_LOGGING_ENABLED] ?: false,
+            flowBubbleEnabled = prefs[Keys.FLOW_BUBBLE_ENABLED] ?: false,
+            flowBubblePhraseStartEnabled = prefs[Keys.FLOW_BUBBLE_PHRASE_START_ENABLED] ?: false,
+            flowBubblePhraseStartPhrase = prefs[Keys.FLOW_BUBBLE_PHRASE_START_PHRASE] ?: "start speaking",
+            flowBubbleExplicitListeningMode = prefs[Keys.FLOW_BUBBLE_EXPLICIT_LISTENING_MODE] ?: false,
+            flowBubbleClipboardFallbackEnabled = prefs[Keys.FLOW_BUBBLE_CLIPBOARD_FALLBACK_ENABLED] ?: true,
+            flowBubbleSizePercent = prefs[Keys.FLOW_BUBBLE_SIZE_PERCENT] ?: 1.0f,
+            flowBubbleOpacity = prefs[Keys.FLOW_BUBBLE_OPACITY] ?: 0.94f,
+            flowBubbleSnoozed = prefs[Keys.FLOW_BUBBLE_SNOOZED] ?: false
         )
     }
 
@@ -58,6 +66,14 @@ class SpeakRepository(private val context: Context) {
             prefs[Keys.POST_PROCESSING_MODEL] = settings.postProcessingModel
             prefs[Keys.POST_PROCESSING_PROMPT] = settings.postProcessingPrompt
             prefs[Keys.DEBUG_LOGGING_ENABLED] = settings.debugLoggingEnabled
+            prefs[Keys.FLOW_BUBBLE_ENABLED] = settings.flowBubbleEnabled
+            prefs[Keys.FLOW_BUBBLE_PHRASE_START_ENABLED] = settings.flowBubblePhraseStartEnabled
+            prefs[Keys.FLOW_BUBBLE_PHRASE_START_PHRASE] = settings.flowBubblePhraseStartPhrase
+            prefs[Keys.FLOW_BUBBLE_EXPLICIT_LISTENING_MODE] = settings.flowBubbleExplicitListeningMode
+            prefs[Keys.FLOW_BUBBLE_CLIPBOARD_FALLBACK_ENABLED] = settings.flowBubbleClipboardFallbackEnabled
+            prefs[Keys.FLOW_BUBBLE_SIZE_PERCENT] = settings.flowBubbleSizePercent
+            prefs[Keys.FLOW_BUBBLE_OPACITY] = settings.flowBubbleOpacity
+            prefs[Keys.FLOW_BUBBLE_SNOOZED] = settings.flowBubbleSnoozed
         }
     }
 
@@ -199,6 +215,14 @@ class SpeakRepository(private val context: Context) {
         val POST_PROCESSING_MODEL = stringPreferencesKey("postProcessingModel")
         val POST_PROCESSING_PROMPT = stringPreferencesKey("postProcessingPrompt")
         val DEBUG_LOGGING_ENABLED = booleanPreferencesKey("debugLoggingEnabled")
+        val FLOW_BUBBLE_ENABLED = booleanPreferencesKey("flowBubble.enabled")
+        val FLOW_BUBBLE_PHRASE_START_ENABLED = booleanPreferencesKey("flowBubble.phraseStartEnabled")
+        val FLOW_BUBBLE_PHRASE_START_PHRASE = stringPreferencesKey("flowBubble.phraseStartPhrase")
+        val FLOW_BUBBLE_EXPLICIT_LISTENING_MODE = booleanPreferencesKey("flowBubble.explicitListeningMode")
+        val FLOW_BUBBLE_CLIPBOARD_FALLBACK_ENABLED = booleanPreferencesKey("flowBubble.clipboardFallbackEnabled")
+        val FLOW_BUBBLE_SIZE_PERCENT = floatPreferencesKey("flowBubble.sizePercent")
+        val FLOW_BUBBLE_OPACITY = floatPreferencesKey("flowBubble.opacity")
+        val FLOW_BUBBLE_SNOOZED = booleanPreferencesKey("flowBubble.snoozed")
         val OPENCLAW_GATEWAY_URL = stringPreferencesKey("openclaw.gatewayUrl")
         val OPENCLAW_ENABLED = booleanPreferencesKey("openclaw.enabled")
         val OPENCLAW_TTS_ENABLED = booleanPreferencesKey("openclaw.ttsEnabled")

@@ -1,10 +1,17 @@
 package com.justspeaktoit.android
 
+import android.Manifest
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
@@ -21,6 +28,7 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
     private val postProcessor = OpenRouterPostProcessor()
     private val openClawGateway = OpenClawGatewayClient()
     private val speechSpeaker = AndroidSpeechSpeaker(appContext)
+    private val insertionCoordinator = VoiceInsertionCoordinator(appContext)
     private var liveTranscriptionSession: LiveTranscriptionSession? = null
     private var gatewaySession: GatewaySession? = null
 
@@ -29,7 +37,8 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
             settings = repository.loadSettings(),
             openClawSettings = repository.loadOpenClawSettings(),
             history = repository.loadHistory(),
-            conversations = repository.loadConversations()
+            conversations = repository.loadConversations(),
+            flowBubblePermissions = currentBubblePermissionStatus()
         )
     )
     val uiState: StateFlow<SpeakUiState> = _uiState
@@ -41,6 +50,7 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.settings.autoStartRecording) {
             toggleRecording()
         }
+        syncFlowBubbleService()
     }
 
     fun handleExternalToggleRecording() {
@@ -111,7 +121,8 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
         val duration = ((System.currentTimeMillis() - (state.recordingStartedAtMillis ?: System.currentTimeMillis())) / 1000)
             .toInt()
             .coerceAtLeast(1)
-        val finalText = state.transcriptText.ifBlank { "Android transcription completed" }
+        val rawText = state.transcriptText.ifBlank { "Android transcription completed" }
+        val finalText = prepareDictationForOutput(rawText, state.settings).ifBlank { rawText }
         val entry = HistoryEntry(text = finalText, model = resolvedModel(state.settings), durationSeconds = duration)
         val nextHistory = listOf(entry) + state.history
         repository.saveHistory(nextHistory)
@@ -122,10 +133,21 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
                 transcriptText = finalText,
                 history = nextHistory,
                 recordingStartedAtMillis = null,
-                statusMessage = "Copied ${entry.wordCount} words to clipboard"
+                statusMessage = "Prepared ${entry.wordCount} words"
             )
         }
-        copyText(finalText)
+        if (state.settings.flowBubbleEnabled) {
+            val insertion = insertionCoordinator.insertOrFallback(finalText, state.settings.flowBubbleClipboardFallbackEnabled)
+            _uiState.update {
+                it.copy(
+                    copied = insertion.method == VoiceInsertionMethod.ClipboardFallback,
+                    statusMessage = insertion.message,
+                    flowBubblePermissions = currentBubblePermissionStatus()
+                )
+            }
+        } else {
+            copyText(finalText)
+        }
         if (state.settings.autoPostProcess && state.settings.openRouterKeyStored) {
             processTranscript(finalText)
         }
@@ -177,6 +199,41 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
     fun setPostProcessingModel(model: String) = updateSettings { it.copy(postProcessingModel = model) }
     fun setPostProcessingPrompt(prompt: String) = updateSettings { it.copy(postProcessingPrompt = prompt) }
     fun setDebugLogging(enabled: Boolean) = updateSettings { it.copy(debugLoggingEnabled = enabled) }
+    fun setFlowBubbleEnabled(enabled: Boolean) = updateSettings { it.copy(flowBubbleEnabled = enabled) }
+    fun setFlowBubblePhraseStartEnabled(enabled: Boolean) = updateSettings { it.copy(flowBubblePhraseStartEnabled = enabled) }
+    fun setFlowBubblePhraseStartPhrase(phrase: String) = updateSettings { it.copy(flowBubblePhraseStartPhrase = phrase) }
+    fun setFlowBubbleExplicitListeningMode(enabled: Boolean) = updateSettings { it.copy(flowBubbleExplicitListeningMode = enabled) }
+    fun setFlowBubbleClipboardFallback(enabled: Boolean) = updateSettings { it.copy(flowBubbleClipboardFallbackEnabled = enabled) }
+    fun setFlowBubbleSizePercent(value: Float) = updateSettings { it.copy(flowBubbleSizePercent = value.coerceIn(0.75f, 1.35f)) }
+    fun setFlowBubbleOpacity(value: Float) = updateSettings { it.copy(flowBubbleOpacity = value.coerceIn(0.6f, 1.0f)) }
+    fun setFlowBubbleSnoozed(enabled: Boolean) = updateSettings { it.copy(flowBubbleSnoozed = enabled) }
+
+    fun refreshBubblePermissions() {
+        _uiState.update { it.copy(flowBubblePermissions = currentBubblePermissionStatus()) }
+        syncFlowBubbleService()
+    }
+
+    fun openOverlaySettings() {
+        appContext.startActivity(VoiceBubbleOverlayService.overlaySettingsIntent(appContext.packageName))
+    }
+
+    fun openAccessibilitySettings() {
+        appContext.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    fun openNotificationSettings() {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, appContext.packageName)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${appContext.packageName}"))
+        }
+        appContext.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    fun openBatterySettings() {
+        appContext.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     fun saveApiKey(account: String, value: String) {
         repository.storeSecret(account, value)
@@ -186,7 +243,8 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
     private fun updateSettings(transform: (SpeakSettings) -> SpeakSettings) {
         val next = transform(_uiState.value.settings)
         repository.saveSettings(next)
-        _uiState.update { it.copy(settings = repository.loadSettings()) }
+        _uiState.update { it.copy(settings = repository.loadSettings(), flowBubblePermissions = currentBubblePermissionStatus()) }
+        syncFlowBubbleService()
     }
 
     fun updateOpenClawSettings(transform: (OpenClawSettingsState) -> OpenClawSettingsState) {
@@ -370,6 +428,38 @@ class SpeakViewModel(application: Application) : AndroidViewModel(application) {
                 statusMessage = if (processed.isBlank()) "Nothing to polish" else "Transcript polished"
             )
         }
+    }
+
+    private fun prepareDictationForOutput(rawText: String, settings: SpeakSettings): String {
+        val phrase = VoiceStartPhraseMatcher.trimTrigger(
+            transcript = rawText,
+            phrase = settings.flowBubblePhraseStartPhrase,
+            enabled = settings.flowBubblePhraseStartEnabled && settings.flowBubbleExplicitListeningMode
+        )
+        val commands = VoiceCommandProcessor.process(phrase.text)
+        return if (commands.discarded) "" else commands.text
+    }
+
+    private fun syncFlowBubbleService() {
+        val settings = _uiState.value.settings
+        val action = if (settings.flowBubbleEnabled) VoiceBubbleOverlayService.ACTION_SHOW else VoiceBubbleOverlayService.ACTION_HIDE
+        appContext.startService(Intent(appContext, VoiceBubbleOverlayService::class.java).setAction(action))
+    }
+
+    private fun currentBubblePermissionStatus(): FlowBubblePermissionStatus {
+        val overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(appContext)
+        val notificationsGranted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val enabledServices = Settings.Secure.getString(appContext.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        val accessibilityEnabled = VoiceInsertionAccessibilityService.active() != null ||
+            enabledServices.contains(VoiceInsertionAccessibilityService::class.java.name)
+        return FlowBubblePermissionStatus(
+            overlayGranted = overlayGranted,
+            accessibilityEnabled = accessibilityEnabled,
+            notificationsGranted = notificationsGranted,
+            batteryUnrestricted = powerManager.isIgnoringBatteryOptimizations(appContext.packageName)
+        )
     }
 
     private fun sendValidationOpenClawMessage(conversationId: String, trimmed: String) {

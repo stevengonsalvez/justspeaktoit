@@ -415,6 +415,17 @@ private fun SettingsScreen(state: SpeakUiState, viewModel: SpeakViewModel, paddi
     ) {
         item { BackHeader("Settings", "Transcription, keys, sync, and app behavior") { viewModel.showTranscribe() } }
         item {
+            SettingsSection("Setup") {
+                Text("Manage dictation access, provider keys, and recovery paths from one place.", color = JsiMuted)
+                Button(onClick = { viewModel.showApiKeys() }, modifier = Modifier.testTag("manageKeysButton")) {
+                    Text("Manage Keys")
+                }
+            }
+        }
+        item {
+            FlowBubbleSettingsSection(state, viewModel)
+        }
+        item {
             SettingsSection("Transcription") {
                 ModelOption("Android Speech (On-device)", "android/local/SpeechRecognizer", state.settings.selectedModel, viewModel::updateSelectedModel)
                 ModelOption("Deepgram Nova-3", "deepgram/nova-3", state.settings.selectedModel, viewModel::updateSelectedModel)
@@ -435,7 +446,7 @@ private fun SettingsScreen(state: SpeakUiState, viewModel: SpeakViewModel, paddi
                 KeyStatus("ElevenLabs", state.settings.elevenLabsKeyStored)
                 KeyStatus("OpenRouter", state.settings.openRouterKeyStored)
                 KeyStatus("OpenAI", state.settings.openAIKeyStored)
-                Button(onClick = { viewModel.showApiKeys() }, modifier = Modifier.testTag("manageKeysButton")) { Text("Manage Keys") }
+                Button(onClick = { viewModel.showApiKeys() }) { Text("Manage Keys") }
             }
         }
         item {
@@ -468,6 +479,74 @@ private fun SettingsScreen(state: SpeakUiState, viewModel: SpeakViewModel, paddi
                 }
                 SwitchRow("Debug Logging", state.settings.debugLoggingEnabled, viewModel::setDebugLogging)
             }
+        }
+    }
+}
+
+@Composable
+private fun FlowBubbleSettingsSection(state: SpeakUiState, viewModel: SpeakViewModel) {
+    SettingsSection("Flow Bubble") {
+        Text(
+            state.flowBubblePermissions.summary,
+            color = if (state.flowBubblePermissions.ready) JsiTeal else JsiCoral,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.testTag("flowBubblePermissionSummary")
+        )
+        Text(
+            "Insertion preview: ${TextInsertionPlanner.insertAtSelection("Hello Android", 5, 5, "Flow").text}",
+            color = JsiMuted,
+            modifier = Modifier.testTag("flowInsertionPreview")
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { viewModel.openOverlaySettings() }, modifier = Modifier.weight(1f).testTag("openOverlaySettingsButton")) {
+                Text("Overlay")
+            }
+            OutlinedButton(onClick = { viewModel.openAccessibilitySettings() }, modifier = Modifier.weight(1f).testTag("openAccessibilitySettingsButton")) {
+                Text("Accessibility")
+            }
+        }
+        SwitchRow("Enable Floating Bubble", state.settings.flowBubbleEnabled, viewModel::setFlowBubbleEnabled)
+        SwitchRow("Phrase Start", state.settings.flowBubblePhraseStartEnabled, viewModel::setFlowBubblePhraseStartEnabled)
+        OutlinedTextField(
+            value = state.settings.flowBubblePhraseStartPhrase,
+            onValueChange = viewModel::setFlowBubblePhraseStartPhrase,
+            label = { Text("Start phrase") },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("flowBubblePhraseInput")
+        )
+        SwitchRow("Explicit Listening Mode", state.settings.flowBubbleExplicitListeningMode, viewModel::setFlowBubbleExplicitListeningMode)
+        SwitchRow("Clipboard Recovery", state.settings.flowBubbleClipboardFallbackEnabled, viewModel::setFlowBubbleClipboardFallback)
+        SwitchRow("Snooze Bubble", state.settings.flowBubbleSnoozed, viewModel::setFlowBubbleSnoozed)
+        Text("Size ${"%.0f".format(state.settings.flowBubbleSizePercent * 100)}%", color = JsiMuted)
+        Slider(
+            value = state.settings.flowBubbleSizePercent,
+            onValueChange = viewModel::setFlowBubbleSizePercent,
+            valueRange = 0.75f..1.35f,
+            modifier = Modifier.testTag("flowBubbleSizeSlider")
+        )
+        Text("Opacity ${"%.0f".format(state.settings.flowBubbleOpacity * 100)}%", color = JsiMuted)
+        Slider(
+            value = state.settings.flowBubbleOpacity,
+            onValueChange = viewModel::setFlowBubbleOpacity,
+            valueRange = 0.6f..1.0f,
+            modifier = Modifier.testTag("flowBubbleOpacitySlider")
+        )
+        PermissionStatusRow("Overlay", state.flowBubblePermissions.overlayGranted)
+        PermissionStatusRow("Accessibility", state.flowBubblePermissions.accessibilityEnabled)
+        PermissionStatusRow("Notifications", state.flowBubblePermissions.notificationsGranted)
+        PermissionStatusRow("Battery", state.flowBubblePermissions.batteryUnrestricted)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { viewModel.openNotificationSettings() }, modifier = Modifier.weight(1f)) {
+                Text("Notifications")
+            }
+            OutlinedButton(onClick = { viewModel.openBatterySettings() }, modifier = Modifier.weight(1f)) {
+                Text("Battery")
+            }
+        }
+        OutlinedButton(onClick = { viewModel.refreshBubblePermissions() }, modifier = Modifier.testTag("refreshBubblePermissionsButton")) {
+            Text("Refresh")
         }
     }
 }
@@ -910,6 +989,18 @@ private fun KeyStatus(label: String, stored: Boolean) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f))
         Text(if (stored) "Stored" else "Missing", color = if (stored) Color(0xFF0B7A3B) else Color.Gray)
+    }
+}
+
+@Composable
+private fun PermissionStatusRow(label: String, granted: Boolean) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f))
+        StatusChip(
+            if (granted) "Ready" else "Setup",
+            if (granted) JsiTeal else JsiCoral,
+            if (granted) Color(0xFFE6F5F3) else Color(0xFFFFF0ED)
+        )
     }
 }
 

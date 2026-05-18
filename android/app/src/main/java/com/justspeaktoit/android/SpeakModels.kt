@@ -39,8 +39,26 @@ data class SpeakSettings(
     val elevenLabsKeyStored: Boolean = false,
     val openRouterKeyStored: Boolean = false,
     val openAIKeyStored: Boolean = false,
-    val debugLoggingEnabled: Boolean = false
+    val debugLoggingEnabled: Boolean = false,
+    val flowBubbleEnabled: Boolean = false,
+    val flowBubblePhraseStartEnabled: Boolean = false,
+    val flowBubblePhraseStartPhrase: String = "start speaking",
+    val flowBubbleExplicitListeningMode: Boolean = false,
+    val flowBubbleClipboardFallbackEnabled: Boolean = true,
+    val flowBubbleSizePercent: Float = 1.0f,
+    val flowBubbleOpacity: Float = 0.94f,
+    val flowBubbleSnoozed: Boolean = false
 )
+
+data class FlowBubblePermissionStatus(
+    val overlayGranted: Boolean = false,
+    val accessibilityEnabled: Boolean = false,
+    val notificationsGranted: Boolean = true,
+    val batteryUnrestricted: Boolean = false
+) {
+    val ready: Boolean get() = overlayGranted && accessibilityEnabled && notificationsGranted
+    val summary: String get() = if (ready) "Ready in other apps" else "Needs setup"
+}
 
 data class OpenClawSettingsState(
     val gatewayUrl: String = "",
@@ -81,5 +99,6 @@ data class SpeakUiState(
     val isOpenClawProcessing: Boolean = false,
     val isSpeaking: Boolean = false,
     val partialVoiceInput: String = "",
+    val flowBubblePermissions: FlowBubblePermissionStatus = FlowBubblePermissionStatus(),
     val statusMessage: String? = null
 )
