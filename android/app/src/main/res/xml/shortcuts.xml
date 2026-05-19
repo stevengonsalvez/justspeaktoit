@@ -1,0 +1,14 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher"
+        android:shortcutId="transcribe_voice"
+        android:shortcutLongLabel="@string/shortcut_transcribe_long_label"
+        android:shortcutShortLabel="@string/shortcut_transcribe_short_label">
+        <intent
+            android:action="com.justspeaktoit.android.action.TOGGLE_RECORDING"
+            android:targetClass="com.justspeaktoit.android.MainActivity"
+            android:targetPackage="com.justspeaktoit.android.debug" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>
