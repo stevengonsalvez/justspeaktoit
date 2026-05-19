@@ -45,6 +45,11 @@ verifies API-key access plus the Flow Bubble UI with UIAutomator, saving
 `android/validation/flow-bubble-settings-ui.xml` and
 `android/validation/flow-bubble-settings.png`.
 
+The same script also drives the interactive validation matrix: it taps through
+Transcribe mic start/stop, verifies a saved History entry, opens OpenClaw, uses
+the OpenClaw voice button, and saves proof XML/screenshots for each step. The
+full matrix lives at `Docs/Android/ANDROID_VALIDATION_MATRIX.md`.
+
 Flow Bubble validation is included in the instrumentation suite. The emulator can
 show the settings, permission status cards, phrase-start configuration, and
 insertion preview automatically. Real cross-app insertion requires the user to
